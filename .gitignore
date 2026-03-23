@@ -1,0 +1,8 @@
+.env
+__pycache__/
+*.pyc
+*.faiss
+mcp/memory.db
+evaluation/evals.json
+.venv/
+venv/
