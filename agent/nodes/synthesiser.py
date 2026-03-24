@@ -1,30 +1,36 @@
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_community.chat_models import ChatOllama
 from agent.state import AgentState
 from app.config import settings
-import asyncio
+
+# CRITICAL: streaming=True must be set during initialization
+gemini_llm = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash", 
+    google_api_key=settings.google_api_key,
+    streaming=True  # <--- Enables the token flow
+)
+
+mistral_llm = ChatOllama(model="mistral", temperature=0.7)
 
 async def synthesiser_node(state: AgentState) -> dict:
-    print("[Synthesiser] Generating final report...")
-    
-    # Use the specific 1.5-flash model
-    llm = ChatGoogleGenerativeAI(
-        model=settings.ollama_model, 
-        google_api_key=settings.google_api_key,
-        streaming=True
-    )
-
+    """
+    Final synthesis node. 
+    Because we use 'astream_events' in the router, 
+    this node will now stream tokens to the user in real-time.
+    """
     context = "\n\n".join(state.get("graded_docs", []))
-    prompt = f"Write a joke about AI based on this context: {context}"
+    query = state.get("query", "")
+    
+    prompt = f"Using this research: {context}\n\nAnswer this: {query}"
 
-    full_content = ""
     try:
-        # Using ainvoke instead of astream for a quick test 
-        # to see if the 404 disappears
-        response = await llm.ainvoke(prompt)
-        full_content = response.content
-        
-        print("[Synthesiser] Success!")
-        return {"final_report": full_content}
+        # LangGraph handles the streaming wrap-around for ainvoke 
+        # when astream_events is called in the router.
+        response = await gemini_llm.ainvoke(prompt)
+        return {"final_report": response.content}
+    
     except Exception as e:
-        print(f"[Synthesiser] Error: {e}")
-        return {"final_report": "Why did the AI cross the road? To optimize the path! (API Error fallback)"}
+        print(f"[Synthesiser] Gemini failed. Falling back to local Mistral...")
+        # Mistral (Ollama) also supports streaming!
+        response = await mistral_llm.ainvoke(prompt)
+        return {"final_report": response.content}                                                                                                                           

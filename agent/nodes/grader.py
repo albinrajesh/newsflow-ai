@@ -1,14 +1,14 @@
+import asyncio
 from langchain_community.chat_models import ChatOllama
 from agent.state import AgentState
 
 # Connect to your local Mistral
-# Mistral is perfect for binary decisions like YES/NO
+# temperature=0 is essential for consistent YES/NO answers
 llm = ChatOllama(model="mistral", temperature=0)
 
 async def grader_node(state: AgentState) -> dict:
     """
-    Evaluates document relevance using LOCAL Mistral 7B.
-    This node is now lightning-fast with zero API cost.
+    Evaluates document relevance using LOCAL Mistral 7B in PARALLEL.
     """
     docs = state.get("retrieved_docs", [])
     query = state.get("query", "")
@@ -17,26 +17,36 @@ async def grader_node(state: AgentState) -> dict:
         print("[Grader] No documents found to grade.")
         return {"graded_docs": [], "needs_retry": True}
 
-    print(f"[Grader] Local Mistral is evaluating {len(docs)} documents...")
-    
-    graded_docs = []
-    for doc in docs:
-        # NO MORE SLEEPS! Mistral runs as fast as your hardware allows.
+    print(f"[Grader] Local Mistral is evaluating {len(docs)} documents in parallel...")
+
+    # --- INTERNAL HELPER FUNCTION ---
+    async def grade_single_doc(doc):
+        """Helper to grade one document asynchronously."""
         prompt = f"""Is the following document useful for answering this query: '{query}'?
         Answer ONLY 'YES' or 'NO'.
         
         DOCUMENT: {doc}
         """
-        
         try:
+            # Note: Using ainvoke for async compatibility
             response = await llm.ainvoke(prompt)
             verdict = response.content.strip().upper()
             
             if "YES" in verdict:
-                graded_docs.append(doc)
+                return doc
+            return None
         except Exception as e:
             print(f"[Grader] Error processing doc: {e}")
-            graded_docs.append(doc) # Fallback: keep the doc if model errors
+            # Fallback: keep the doc if model errors to avoid losing potential data
+            return doc
+
+    # --- PARALLEL EXECUTION ---
+    # asyncio.gather schedules all calls at once
+    tasks = [grade_single_doc(doc) for doc in docs]
+    results = await asyncio.gather(*tasks)
+
+    # Filter out the 'None' results (irrelevant docs)
+    graded_docs = [doc for doc in results if doc is not None]
 
     print(f"[Grader] Done. Found {len(graded_docs)} relevant docs.")
     
