@@ -1,16 +1,21 @@
 import sys
 import os
+from dotenv import load_dotenv # ADD THIS
+from langfuse.langchain import CallbackHandler 
 
-# Force the project root into the python path
+# 1. LOAD ENV BEFORE ANYTHING ELSE
+load_dotenv() 
+
+# Force project root into path
 sys.path.append(os.getcwd())
 
 from agent.graph import agent
 from agent.state import AgentState
 
 def run_manual_test():
-    print("\n[DEBUG] Starting the Agent Test Script...")
-    
-    # 1. Define Initial State
+    # 2. This will now find LANGFUSE_PUBLIC_KEY and LANGFUSE_HOST automatically
+    langfuse_handler = CallbackHandler() 
+
     initial_state = {
         "query": "What are the latest AI trends in 2026?",
         "sub_questions": [],
@@ -23,24 +28,28 @@ def run_manual_test():
         "fallback_triggered": False
     }
 
-    print(f"[DEBUG] Invoking Graph with query: {initial_state['query']}")
-    
     try:
-        # 2. Run the Graph
-        # We use a recursion_limit to ensure it doesn't loop forever
-        config = {"recursion_limit": 50}
+        # 3. Use 'configurable' to give your trace a name in the dashboard
+        config = {
+            "callbacks": [langfuse_handler], 
+            "recursion_limit": 50,
+            "configurable": {"thread_id": "manual_test_01"}
+        }
+        
+        print("[DEBUG] Running agent with Langfuse tracing...")
         final_output = agent.invoke(initial_state, config=config)
 
-        # 3. Print Results
         print("\n" + "="*50)
         print("FINAL AGENT REPORT")
         print("="*50)
-        print(final_output["final_report"])
+        print(final_output.get("final_report", "No report generated."))
         print("="*50)
-        print(f"Total Sources Used: {len(final_output['graded_docs'])}")
+        print(f"Total Sources Used: {len(final_output.get('graded_docs', []))}")
         
+        print("\n[SUCCESS] Trace sent to Langfuse!")
+
     except Exception as e:
-        print(f"\n[FATAL ERROR] The agent crashed: {e}")
+        print(f"Error: {e}")
         import traceback
         traceback.print_exc()
 

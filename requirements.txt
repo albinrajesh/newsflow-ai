@@ -1,19 +1,30 @@
+# Web & API Framework
 fastapi==0.111.0
 uvicorn==0.29.0
 pydantic-settings>=2.2.1
-sentence-transformers==2.7.0
-faiss-cpu==1.8.0
-numpy==1.26.4
 python-dotenv==1.0.1
 httpx==0.27.0
-beautifulsoup4==4.12.3
+
+# AI & LLM Orchestration
+openai>=1.30.0
 litellm==1.40.0
 langchain>=0.2.0
 langchain-core>=0.2.0
-langgraph>=0.1.1  # Fixes the 'No matching distribution' error
+langchain-community>=0.2.0
+langgraph>=0.1.1
 tavily-python==0.3.3
 fastmcp>=0.1.0
+
+# Vector DB & Embeddings
+sentence-transformers==2.7.0
+faiss-cpu==1.8.0
+numpy==1.26.4
+beautifulsoup4==4.12.3
+
+# Evaluation & Monitoring
 ragas==0.1.9
 langfuse==2.36.0
+
+# Testing
 pytest==8.2.0
 pytest-asyncio==0.23.6
