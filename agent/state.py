@@ -1,10 +1,12 @@
-from typing import TypedDict
+from typing import TypedDict, Annotated, List
+import operator
 
 class AgentState(TypedDict):
     query: str
-    sub_questions: list[str]
-    retrieved_docs: list[str]
-    graded_docs: list[str]
+    # Use Annotated and operator.add so new data APPENDS to the list
+    sub_questions: Annotated[List[str], operator.add]
+    retrieved_docs: Annotated[List[str], operator.add]
+    graded_docs: Annotated[List[str], operator.add]
     needs_retry: bool
     retry_count: int
     final_report: str

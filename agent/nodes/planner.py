@@ -1,39 +1,25 @@
-from openai import OpenAI
+from langchain_community.chat_models import ChatOllama
 from agent.state import AgentState
-from app.config import settings
 
-client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=settings.openrouter_api_key,
-)
+llm = ChatOllama(model="mistral", temperature=0)
 
-def planner_node(state: AgentState) -> AgentState:
-    prompt = f"""You are a research planner. Break this query into exactly 3 focused sub-questions.
-Query: {state["query"]}
-Return ONLY a numbered list like:
-1. sub question one
-2. sub question two
-3. sub question three"""
+async def planner_node(state: AgentState) -> dict:
+    """
+    Uses Mistral to break the query into search steps.
+    """
+    query = state["query"]
+    print(f"[Planner] Local Mistral is planning for: {query}")
 
-    response = client.chat.completions.create(
-        model=settings.ollama_model,
-        messages=[{"role": "user", "content": prompt}],
-        extra_headers={
-            "HTTP-Referer": "http://localhost:8000", 
-            "X-Title": "Deep Research Agent",
-        }
-    )
-    
-    raw = response.choices[0].message.content.strip()
-    sub_questions = []
-    for line in raw.split("\n"):
-        line = line.strip()
-        if line and line[0].isdigit():
-            question = line.split(".", 1)[-1].split(")", 1)[-1].strip()
-            sub_questions.append(question)
-            
-    if len(sub_questions) == 0:
-        sub_questions = [state["query"]]
+    prompt = f"""Break this research query into 3 specific search sub-questions.
+    Query: {query}
+    Output ONLY the questions, one per line."""
+
+    try:
+        response = await llm.ainvoke(prompt)
+        sub_questions = [q.strip() for q in response.content.split("\n") if q.strip()]
         
-    print(f"[Planner] Generated {len(sub_questions)} sub-questions")
-    return {**state, "sub_questions": sub_questions}
+        # Limit to top 3 for speed
+        return {"sub_questions": sub_questions[:3]}
+    except Exception as e:
+        print(f"[Planner] Error: {e}")
+        return {"sub_questions": [query]} # Fallback to original query

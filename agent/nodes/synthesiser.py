@@ -1,26 +1,30 @@
-from openai import OpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from agent.state import AgentState
 from app.config import settings
+import asyncio
 
-client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=settings.openrouter_api_key,
-)
-
-def synthesiser_node(state: AgentState) -> AgentState:
+async def synthesiser_node(state: AgentState) -> dict:
     print("[Synthesiser] Generating final report...")
     
-    context = "\n\n".join(state["graded_docs"])
-    prompt = f"""Write a comprehensive research report on: {state["query"]}
-Use the following sources:
-{context}
-
-Format the report in professional Markdown with headers and bullet points."""
-
-    response = client.chat.completions.create(
-        model=settings.ollama_model,
-        messages=[{"role": "user", "content": prompt}]
+    # Use the specific 1.5-flash model
+    llm = ChatGoogleGenerativeAI(
+        model=settings.ollama_model, 
+        google_api_key=settings.google_api_key,
+        streaming=True
     )
-    
-    report = response.choices[0].message.content
-    return {**state, "final_report": report}
+
+    context = "\n\n".join(state.get("graded_docs", []))
+    prompt = f"Write a joke about AI based on this context: {context}"
+
+    full_content = ""
+    try:
+        # Using ainvoke instead of astream for a quick test 
+        # to see if the 404 disappears
+        response = await llm.ainvoke(prompt)
+        full_content = response.content
+        
+        print("[Synthesiser] Success!")
+        return {"final_report": full_content}
+    except Exception as e:
+        print(f"[Synthesiser] Error: {e}")
+        return {"final_report": "Why did the AI cross the road? To optimize the path! (API Error fallback)"}
