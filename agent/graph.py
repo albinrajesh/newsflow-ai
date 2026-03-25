@@ -1,5 +1,4 @@
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.memory import MemorySaver # <--- Use MemorySaver
 from app.config import settings
 
 from agent.state import AgentState
@@ -11,13 +10,17 @@ from agent.nodes.hallucination_checker import hallucination_checker_node
 
 # --- Router logic ---
 def route_after_grader(state: AgentState) -> str:
+    # If no relevant docs found, go back to PLANNER to try new keywords
     if state.get("needs_retry") and state.get("retry_count", 0) < settings.max_retries:
-        return "researcher"
+        print(f"!!! No relevant docs found. Re-planning (Retry {state['retry_count']+1})...")
+        return "re_plan"
     return "synthesiser"
 
 def route_after_checker(state: AgentState) -> str:
+    # If hallucination detected, start fresh from PLANNER
     if state.get("has_hallucination") and state.get("retry_count", 0) < settings.max_retries:
-        return "researcher"
+        print("!!! Hallucination detected. Re-starting research...")
+        return "re_plan"
     return END
 
 def build_graph():
@@ -32,28 +35,35 @@ def build_graph():
 
     # 2. Define Edges
     workflow.set_entry_point("planner")
+    
+    # Standard linear flow
     workflow.add_edge("planner", "researcher")
     workflow.add_edge("researcher", "grader")
     
+    # --- The Re-Planning Loop ---
     workflow.add_conditional_edges(
         "grader",
         route_after_grader,
-        {"researcher": "researcher", "synthesiser": "synthesiser"}
+        {
+            "re_plan": "planner", # Loops back to the beginning
+            "synthesiser": "synthesiser"
+        }
     )
     
     workflow.add_edge("synthesiser", "checker")
     
+    # --- The Hallucination Loop ---
     workflow.add_conditional_edges(
         "checker",
         route_after_checker,
-        {"researcher": "researcher", END: END}
+        {
+            "re_plan": "planner", 
+            END: END
+        }
     )
 
-    # 3. Persistence Setup (Memory Version)
-    # This works perfectly with async nodes and requires no setup
-    checkpointer = MemorySaver()
-    
-    return workflow.compile(checkpointer=checkpointer)
+    # 3. Compilation (Stateless)
+    return workflow.compile()
 
 # Create the compiled agent instance
 agent = build_graph()

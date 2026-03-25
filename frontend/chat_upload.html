@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Newsflow AI - Deep Research</title>
+
+    <!-- Premium Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600&family=Syne:wght@500;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+
+    <!-- Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.5/purify.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/tokyo-night-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+
+    <style>
+        :root {
+            --mesh-1: #0a0a0b;
+            --mesh-2: #12101c;
+            --mesh-3: #1a162b;
+            --glass-bg: rgba(20, 20, 25, 0.4);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-highlight: rgba(255, 255, 255, 0.15);
+
+            --text-primary: #ffffff;
+            --text-secondary: #94a3b8;
+            --accent: #6d28d9;
+            --accent-glow: #8b5cf6;
+            --danger: #ef4444;
+
+            --font-display: 'Syne', sans-serif;
+            --font-body: 'Plus Jakarta Sans', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            cursor: none;
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            background-color: var(--mesh-1);
+            color: var(--text-primary);
+            font-family: var(--font-body);
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        /* --- Custom Cursor --- */
+        .cursor-follower {
+            position: fixed;
+            top: 0; left: 0;
+            width: 24px; height: 24px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(2px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            pointer-events: none;
+            z-index: 9999;
+            transform: translate(-50%, -50%);
+            transition: width 0.3s, height 0.3s, background 0.3s;
+        }
+
+        .cursor-follower.hover-active {
+            width: 48px; height: 48px;
+            background: rgba(139, 92, 246, 0.3);
+            border-color: var(--accent-glow);
+        }
+
+        /* --- Ambient Animated Background --- */
+        .ambient-mesh {
+            position: absolute;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background:
+                radial-gradient(circle at 50% 40%, rgba(139, 92, 246, 0.15) 0%, transparent 40%),
+                radial-gradient(circle at 80% 80%, rgba(37, 99, 235, 0.1) 0%, transparent 40%),
+                radial-gradient(circle at 20% 80%, rgba(217, 70, 239, 0.08) 0%, transparent 40%);
+            z-index: 0;
+            animation: breathe 20s infinite alternate cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .grain {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            background-image: url('data:image/svg+xml,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)"/%3E%3C/svg%3E');
+            opacity: 0.03;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        /* --- Preloader --- */
+        #preloader {
+            position: fixed;
+            inset: 0;
+            background: var(--mesh-1);
+            z-index: 5000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .loader-mask {
+            overflow: hidden;
+            clip-path: polygon(0 0, 100% 0, 100% 100%, 0% 100%);
+        }
+
+        .loader-text {
+            font-family: var(--font-display);
+            font-size: 3rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            transform: translateY(110%);
+        }
+
+        /* --- Layout --- */
+        .app-window {
+            position: relative;
+            z-index: 10;
+            width: 100vw;
+            height: 100vh;
+            background: var(--glass-bg);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: none;
+            display: flex;
+            flex-direction: row;
+            opacity: 0;
+        }
+
+        /* --- Sidebar & Main Content --- */
+        .sidebar {
+            width: 320px;
+            flex-shrink: 0;
+            border-right: 1px solid var(--glass-border);
+            display: flex;
+            flex-direction: column;
+            background: rgba(10, 10, 14, 0.3);
+            z-index: 20;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .sidebar.collapsed {
+            width: 0;
+            padding-left: 0;
+            padding-right: 0;
+            border-right: none;
+            opacity: 0;
+        }
+
+        .sidebar-inner {
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            width: 320px; /* Fixed width to prevent wrapping during collapse */
+        }
+
+        .sidebar-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .brand-logo {
+            width: 38px; height: 38px;
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        .brand-name {
+            font-family: var(--font-display);
+            font-size: 1.2rem;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+        }
+
+        .sidebar-toggle-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            width: 32px; height: 32px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+        .sidebar-toggle-btn:hover {
+            color: var(--text-primary);
+            background: rgba(255,255,255,0.05);
+        }
+
+        .new-chat-btn {
+            width: 100%;
+            padding: 0.8rem 1rem;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-family: var(--font-body);
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+            transition: all 0.2s ease;
+        }
+        .new-chat-btn:hover {
+            background: rgba(255,255,255,0.1);
+            border-color: var(--glass-highlight);
+        }
+
+        .history-header {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.75rem;
+            padding-left: 0.5rem;
+        }
+
+        .history-list {
+            flex-grow: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            scrollbar-width: none;
+        }
+
+        .history-item {
+            padding: 0.75rem 1rem;
+            border-radius: 10px;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .history-item:hover {
+            background: rgba(255,255,255,0.05);
+            color: var(--text-primary);
+        }
+        .history-item.active {
+            background: rgba(139, 92, 246, 0.15);
+            color: var(--text-primary);
+            border-color: rgba(139, 92, 246, 0.3);
+        }
+
+        /* Sidebar Footer (Settings/Profile) */
+        .sidebar-footer {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            transition: all 0.2s;
+        }
+        .sidebar-footer:hover {
+            background: rgba(255,255,255,0.08);
+            border-color: var(--glass-highlight);
+        }
+        .user-avatar {
+            width: 36px; height: 36px;
+            border-radius: 36px;
+            background: linear-gradient(135deg, #10b981, #059669);
+            display: flex; align-items: center; justify-content: center;
+            font-family: var(--font-display); font-weight: 700; font-size: 0.9rem;
+        }
+        .user-info { flex-grow: 1; }
+        .user-name { font-size: 0.9rem; font-weight: 600; color: var(--text-primary); }
+        .user-plan { font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
+
+        /* --- Main Content Area --- */
+        .main-content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            min-width: 0;
+        }
+
+        /* "Thinking" Progress Bar */
+        .progress-bar-container {
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            background: transparent;
+            overflow: hidden;
+            z-index: 50;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .progress-bar-container.active { opacity: 1; }
+        .progress-bar {
+            width: 30%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, var(--accent-glow), transparent);
+            animation: progressLoop 1.5s infinite linear;
+        }
+        @keyframes progressLoop {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(350%); }
+        }
+
+        .top-nav {
+            position: absolute;
+            top: 1.5rem; left: 1.5rem;
+            z-index: 40;
+        }
+        .sidebar-open-btn {
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            color: var(--text-primary);
+            width: 44px; height: 44px;
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none;
+            transition: all 0.3s;
+        }
+        .sidebar-open-btn.show {
+            opacity: 1; pointer-events: all;
+        }
+        .sidebar-open-btn:hover { border-color: var(--glass-highlight); }
+
+        .chat-canvas {
+            flex-grow: 1;
+            padding: 5rem 3rem 8rem 3rem; /* Extra padding at bottom so dock doesn't overlap text */
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            scrollbar-width: none;
+        }
+
+        .message {
+            max-width: 80%;
+            display: flex;
+            flex-direction: column;
+            opacity: 0;
+            transform: translateY(15px);
+            animation: floatingIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .message.user { align-self: flex-end; align-items: flex-end; max-width: 60%; }
+        .message.ai { align-self: flex-start; }
+        
+        .msg-bubble {
+            padding: 1.2rem 1.8rem;
+            line-height: 1.6;
+            font-size: 1.05rem;
+            border-radius: 20px;
+        }
+        .user .msg-bubble {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--glass-border);
+            border-bottom-right-radius: 4px;
+        }
+        .ai .msg-bubble {
+            background: transparent;
+            padding-left: 0;
+            color: #d1d5db;
+            width: 100%;
+        }
+
+        /* --- MARKDOWN STYLING INSIDE CHAT --- */
+        .markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4 {
+            font-family: var(--font-display);
+            color: var(--text-primary);
+            margin: 1.5rem 0 0.75rem 0;
+        }
+        .markdown-body p { margin-bottom: 1rem; }
+        .markdown-body ul, .markdown-body ol { margin-left: 1.5rem; margin-bottom: 1rem; }
+        .markdown-body li { margin-bottom: 0.5rem; }
+        .markdown-body strong { color: var(--text-primary); }
+        .markdown-body code {
+            font-family: var(--font-mono);
+            background: rgba(0,0,0,0.5);
+            padding: 0.2rem 0.4rem;
+            border-radius: 6px;
+            font-size: 0.9em;
+            color: var(--accent-glow);
+        }
+        .markdown-body pre {
+            background: #1a1b26; /* matches tokyo-night */
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 1rem;
+            margin: 1.5rem 0;
+            overflow-x: auto;
+            position: relative;
+        }
+        .markdown-body pre code {
+            background: transparent;
+            padding: 0;
+            color: inherit;
+        }
+        /* Top right copy button for blocks */
+        .copy-btn {
+            position: absolute; top: 8px; right: 8px;
+            background: rgba(255,255,255,0.1);
+            border: none; border-radius: 6px;
+            color: var(--text-secondary);
+            font-size: 0.7rem; padding: 4px 8px;
+            transition: 0.2s; z-index: 10;
+        }
+        .copy-btn:hover { background: rgba(255,255,255,0.2); color: white; }
+
+        .doc-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            color: #c4b5fd;
+            padding: 0.5rem 1rem;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+        }
+
+        /* --- Input Dock (Native App Feel) --- */
+        .input-dock {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            padding: 4rem 3rem 2rem 3rem; 
+            /* Frosted glass gradient fading up */
+            background: linear-gradient(180deg, transparent 0%, var(--mesh-1) 50%);
+            z-index: 10;
+        }
+
+        .input-meta {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 0.5rem;
+            padding-right: 1.5rem;
+        }
+
+        .char-count {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-family: var(--font-mono);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .char-count.visible { opacity: 1; }
+
+        .input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 24px;
+            padding: 0.5rem 1rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5), inset 0 2px 4px rgba(0, 0, 0, 0.5);
+            transition: border-color 0.3s ease;
+        }
+        .input-wrapper:focus-within {
+            border-color: rgba(255, 255, 255, 0.4);
+            box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 10px 30px rgba(0,0,0,0.5), inset 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .action-btn {
+            width: 44px; height: 44px;
+            border-radius: 50%;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s ease;
+        }
+        .action-btn.hoverable:hover { color: var(--text-primary); background: rgba(255, 255, 255, 0.1); }
+
+        .upload-toggle { rotate: 0deg; transition: 0.4s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s, color 0.2s; }
+        .upload-toggle.active { transform: rotate(45deg); background: var(--text-primary); color: var(--mesh-1); }
+
+        .main-input {
+            flex-grow: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            font-family: var(--font-body);
+            font-size: 1.1rem;
+            padding: 0 1.5rem;
+            outline: none;
+        }
+        .main-input::placeholder { color: #52525b; }
+
+        /* The Send / Stop Button */
+        .send-btn { background: var(--text-primary); color: var(--mesh-1); }
+        .send-btn.hoverable:hover { background: var(--text-primary); color: var(--mesh-1); transform: scale(1.05); }
+
+        .send-btn.streaming {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger);
+            border: 1px solid rgba(239, 68, 68, 0.5);
+        }
+        .send-btn.streaming:hover {
+            background: rgba(239, 68, 68, 0.4);
+        }
+
+        /* --- Upload Overlay Panel --- */
+        .upload-overlay {
+            position: absolute;
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px) scale(0.95);
+            width: 600px;
+            background: rgba(15, 15, 18, 0.85);
+            backdrop-filter: blur(40px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 24px;
+            padding: 2.5rem;
+            opacity: 0;
+            pointer-events: none;
+            box-shadow: 0 40px 80px rgba(0, 0, 0, 0.6);
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 100;
+            display: flex;
+            gap: 1.5rem;
+        }
+        .upload-overlay.active { opacity: 1; pointer-events: all; transform: translateX(-50%) translateY(0) scale(1); }
+        
+        .upload-card {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            display: flex; flex-direction: column; align-items: center; gap: 1rem;
+            position: relative; overflow: hidden;
+        }
+        .upload-card.hoverable:hover { background: rgba(255, 255, 255, 0.08); border-color: var(--glass-highlight); transform: translateY(-4px); }
+
+        .icon-circle {
+            width: 54px; height: 54px; border-radius: 50%; background: rgba(255, 255, 255, 0.05);
+            display: flex; align-items: center; justify-content: center; margin-bottom: 0.5rem;
+        }
+        .card-title { font-family: var(--font-display); font-weight: 600; font-size: 1.1rem; }
+        .card-sub { font-size: 0.8rem; color: var(--text-secondary); }
+        .file-input-hack { position: absolute; inset: 0; opacity: 0; }
+        .yt-input {
+            width: 100%; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--glass-border);
+            color: white; padding: 0.75rem 1rem; border-radius: 8px; font-family: var(--font-body);
+            font-size: 0.9rem; outline: none; transition: border 0.3s;
+        }
+        .yt-input:focus { border-color: var(--accent-glow); }
+
+        @keyframes floatingIn {
+            0% { opacity: 0; transform: translateY(20px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="ambient-mesh"></div>
+    <div class="grain"></div>
+
+    <!-- Preloader -->
+    <div id="preloader">
+        <div class="loader-mask">
+            <div class="loader-text">Newsflow</div>
+        </div>
+    </div>
+
+    <div class="cursor-follower" id="cursor"></div>
+
+    <!-- Main Glass App -->
+    <div class="app-window" id="app">
+
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-inner">
+                <div class="sidebar-header">
+                    <div class="brand hoverable">
+                        <div class="brand-logo" style="background: transparent; box-shadow: none;">
+                            <img src="file:///C:/Users/LENOVO/.gemini/antigravity/brain/94044f50-daf8-40a1-8ba0-b45656fd6c80/newsflow_premium_logo_1774376229655.png"
+                                alt="N" style="width: 100%; height: 100%; object-fit: cover; border-radius: 12px; box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);">
+                        </div>
+                        <div class="brand-name">Newsflow AI</div>
+                    </div>
+                    <button class="sidebar-toggle-btn hoverable" onclick="toggleSidebar()" title="Collapse Sidebar">
+                        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                    </button>
+                </div>
+
+                <button class="new-chat-btn hoverable">
+                    <span>New Research</span>
+                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                </button>
+
+                <div class="history-header">Recent Sessions</div>
+                <div class="history-list">
+                    <div class="history-item hoverable active">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                        Newsflow Latency Optimization
+                    </div>
+                    <div class="history-item hoverable">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                        Graph RAG vs Standard FAISS
+                    </div>
+                    <div class="history-item hoverable">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                        Aesthetics in Modern Frontend
+                    </div>
+                </div>
+
+                <!-- Settings / Profile Footer -->
+                <div class="sidebar-footer hoverable">
+                    <div class="user-avatar">AD</div>
+                    <div class="user-info">
+                        <div class="user-name">Admin User</div>
+                        <div class="user-plan">Pro Tier</div>
+                    </div>
+                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:var(--text-secondary);">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2-2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Workspace -->
+        <main class="main-content">
+            <!-- Progress Bar -->
+            <div class="progress-bar-container" id="progress-bar">
+                <div class="progress-bar"></div>
+            </div>
+
+            <div class="top-nav">
+                <button class="sidebar-open-btn hoverable" id="sidebar-open-btn" onclick="toggleSidebar()" title="Expand Sidebar">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                </button>
+            </div>
+
+            <section class="chat-canvas" id="chat-canvas">
+                <div class="message ai">
+                    <div class="msg-bubble markdown-body">
+                        <h2>Welcome to Newsflow.</h2>
+                        <p>I am your advanced research agent. You can ask me any question, or upload source material (PDFs / YouTube Links) for me to ingest into the vector database.</p>
+                        <pre><code class="language-python"># Example Architecture
+vector_db = FAISS.load_local("index", embeddings)
+def research(query):
+    return vector_db.similarity_search(query)</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Upload Overlay Drawer -->
+            <div class="upload-overlay" id="upload-panel">
+                <div class="upload-card hoverable">
+                    <div class="icon-circle">
+                        <!-- PDF Icon -->
+                        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line>
+                            <polyline points="10 9 9 9 8 9"></polyline>
+                        </svg>
+                    </div>
+                    <div class="card-title">Upload PDF</div>
+                    <div class="card-sub">Extract and vectorize document</div>
+                    <input type="file" accept=".pdf" class="file-input-hack hoverable" onchange="handleFileUpload(this)">
+                </div>
+                <div class="upload-card">
+                    <div class="icon-circle">
+                        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33 2.78 2.78 0 0 0 1.94 2c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.33 29 29 0 0 0-.46-5.33z"></path>
+                            <polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"></polygon>
+                        </svg>
+                    </div>
+                    <div class="card-title">YouTube Video</div>
+                    <div class="card-sub">Transcribe and index content</div>
+                    <input type="text" class="yt-input hoverable" placeholder="Paste URL and press Enter..." onkeydown="handleYtSubmit(event, this)">
+                </div>
+            </div>
+
+            <footer class="input-dock">
+                <div class="input-meta">
+                    <span class="char-count" id="char-count">0/2000</span>
+                </div>
+                <div class="input-wrapper">
+                    <button class="action-btn upload-toggle hoverable" id="upload-btn" onclick="toggleUploadPanel()">
+                        <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                    </button>
+                    <input type="text" class="main-input hoverable" id="chat-input" placeholder="Ask a question or type a command..." oninput="updateCharCount()" onkeydown="handleChatSubmit(event)">
+                    
+                    <button class="action-btn send-btn hoverable" id="send-btn" onclick="submitChat()">
+                        <svg class="icon-send" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                        <svg class="icon-stop" style="display:none;" width="14" height="14" fill="currentColor" viewBox="0 0 24 24">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        </svg>
+                    </button>
+                </div>
+            </footer>
+
+        </main>
+    </div>
+
+    <script>
+        // Setup Markdown Options
+        marked.setOptions({
+            breaks: true,
+            gfm: true,
+            highlight: function(code, lang) {
+                const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+                return hljs.highlight(code, { language }).value;
+            }
+        });
+
+        // Intro Sequence
+        gsap.to(".loader-text", { y: "0%", duration: 1.2, ease: "power4.out", delay: 0.2 });
+        gsap.to("#preloader", { y: "-100%", duration: 1.5, ease: "power4.inOut", delay: 1.8 });
+        gsap.to("#app", { y: 0, opacity: 1, duration: 1.5, ease: "power4.out", delay: 2.2 });
+
+        // Highlight existing blocks
+        hljs.highlightAll();
+
+        // Cursor Logic
+        const cursor = document.getElementById('cursor');
+        let mouseX = 0, mouseY = 0, cursorX = 0, cursorY = 0;
+        document.addEventListener('mousemove', (e) => { mouseX = e.clientX; mouseY = e.clientY; });
+        function cursorLoop() {
+            cursorX += (mouseX - cursorX) * 0.15;
+            cursorY += (mouseY - cursorY) * 0.15;
+            cursor.style.transform = `translate(calc(${cursorX}px - 50%), calc(${cursorY}px - 50%))`;
+            requestAnimationFrame(cursorLoop);
+        }
+        cursorLoop();
+        function refreshHoverEffects() {
+            document.querySelectorAll('.hoverable').forEach(el => {
+                if(!el.dataset.hoverBound) {
+                    el.addEventListener('mouseenter', () => cursor.classList.add('hover-active'));
+                    el.addEventListener('mouseleave', () => cursor.classList.remove('hover-active'));
+                    el.dataset.hoverBound = "true";
+                }
+            });
+        }
+        refreshHoverEffects();
+
+        // UI Core Logic
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOpenBtn = document.getElementById('sidebar-open-btn');
+        let sidebarCollapsed = false;
+
+        function toggleSidebar() {
+            sidebarCollapsed = !sidebarCollapsed;
+            if (sidebarCollapsed) {
+                sidebar.classList.add('collapsed');
+                sidebarOpenBtn.classList.add('show');
+            } else {
+                sidebar.classList.remove('collapsed');
+                sidebarOpenBtn.classList.remove('show');
+            }
+        }
+
+        const chatInput = document.getElementById('chat-input');
+        const charCount = document.getElementById('char-count');
+        function updateCharCount() {
+            const len = chatInput.value.length;
+            charCount.innerText = `${len}/2000`;
+            if(len > 0) charCount.classList.add('visible');
+            else charCount.classList.remove('visible');
+        }
+
+        let uploadOpen = false;
+        const uploadPanel = document.getElementById('upload-panel');
+        const uploadBtn = document.getElementById('upload-btn');
+        function toggleUploadPanel() {
+            uploadOpen = !uploadOpen;
+            uploadPanel.classList.toggle('active', uploadOpen);
+            uploadBtn.classList.toggle('active', uploadOpen);
+        }
+
+        // Mock Chat Core
+        const chatCanvas = document.getElementById('chat-canvas');
+        const progressBar = document.getElementById('progress-bar');
+        const sendBtn = document.getElementById('send-btn');
+        const iconSend = sendBtn.querySelector('.icon-send');
+        const iconStop = sendBtn.querySelector('.icon-stop');
+        let isGenerating = false;
+
+        function scrollToBottom() { setTimeout(() => { chatCanvas.scrollTop = chatCanvas.scrollHeight; }, 50); }
+
+        function toggleStreamingState(on) {
+            isGenerating = on;
+            progressBar.classList.toggle('active', on);
+            if(on) {
+                sendBtn.classList.add('streaming');
+                iconSend.style.display = 'none';
+                iconStop.style.display = 'block';
+            } else {
+                sendBtn.classList.remove('streaming');
+                iconSend.style.display = 'block';
+                iconStop.style.display = 'none';
+            }
+        }
+
+        function appendUserMessage(content) {
+            const html = `
+                <div class="message user">
+                    <div class="msg-bubble">${content}</div>
+                </div>
+            `;
+            chatCanvas.insertAdjacentHTML('beforeend', html);
+            scrollToBottom();
+        }
+
+        function appendAiMarkdown(markdownContent) {
+            // Render markdown to HTML and sanitize
+            const rawHtml = marked.parse(markdownContent);
+            const cleanHtml = DOMPurify.sanitize(rawHtml);
+            
+            const msgId = "msg-" + Date.now();
+            const html = `
+                <div class="message ai" id="${msgId}">
+                    <div class="msg-bubble markdown-body">${cleanHtml}</div>
+                </div>
+            `;
+            chatCanvas.insertAdjacentHTML('beforeend', html);
+            
+            // Add copy buttons to code blocks
+            const block = document.getElementById(msgId);
+            block.querySelectorAll("pre").forEach(pre => {
+                const btn = document.createElement("button");
+                btn.className = "copy-btn hoverable";
+                btn.innerText = "Copy";
+                btn.onclick = () => {
+                    navigator.clipboard.writeText(pre.innerText);
+                    btn.innerText = "Copied!";
+                    setTimeout(() => btn.innerText = "Copy", 2000);
+                };
+                pre.appendChild(btn);
+            });
+            refreshHoverEffects();
+            scrollToBottom();
+        }
+
+        function handleChatSubmit(e) { if(e.key === 'Enter') submitChat(); }
+
+        function submitChat() {
+            if(isGenerating) {
+                // User pressed stop
+                toggleStreamingState(false);
+                return;
+            }
+
+            const val = chatInput.value.trim();
+            if(!val) return;
+            
+            appendUserMessage(val);
+            chatInput.value = '';
+            updateCharCount();
+            toggleStreamingState(true);
+
+            // Mock processing delay then markdown delivery
+            setTimeout(() => {
+                if(!isGenerating) return; // if user canceled
+                toggleStreamingState(false);
+                const mockMarkdown = `Here are the results of the extraction:\n\n### Optimization Strategy\nThe Graph RAG system effectively bypasses standard vector limitations.\n\n\`\`\`python\nimport asyncio\nsem = asyncio.Semaphore(3)\n# High-performance parallel inference\nasync def local_grade(doc):\n    async with sem:\n        return await llm.ainvoke(doc)\n\`\`\`\n\n* **Speed Increase:** 300%\n* **Hardware Load:** Stable`;
+                appendAiMarkdown(mockMarkdown);
+            }, 2000);
+        }
+
+    </script>
+</body>
+</html>

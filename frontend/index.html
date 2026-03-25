@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXUS - Advanced Researcher</title>
+    <!-- Importing distinctive fonts: Bricolage Grotesque (Bold/Display), JetBrains Mono (Terminal), Schibsted Grotesk (Body) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;700&family=Schibsted+Grotesk:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-color: #070707;
+            --surface-color: #121212;
+            --border-color: #2a2a2a;
+            --text-main: #f0f0f0;
+            --text-muted: #888888;
+            --accent-acid: #D2FF00;
+            --accent-orange: #FF3B00;
+            --font-display: 'Bricolage Grotesque', sans-serif;
+            --font-body: 'Schibsted Grotesk', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            /* Hide scrollbar for a cleaner look */
+            scrollbar-width: none;
+        }
+        *::-webkit-scrollbar {
+            display: none;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: var(--font-body);
+            line-height: 1.6;
+            min-height: 100vh;
+            /* Subtle dot texture background */
+            background-image: radial-gradient(var(--border-color) 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+
+        /* Layout Grid */
+        .nexus-grid {
+            display: grid;
+            grid-template-columns: 400px 1fr;
+            min-height: 100vh;
+            border-right: 1px solid var(--border-color);
+            border-left: 1px solid var(--border-color);
+            max-width: 1600px;
+            margin: 0 auto;
+            background-color: rgba(7, 7, 7, 0.85);
+            backdrop-filter: blur(4px);
+        }
+
+        /* Left Panel - Control Matrix */
+        .control-panel {
+            padding: 3rem 2rem;
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+        }
+
+        .brand-header {
+            margin-bottom: 4rem;
+        }
+
+        .brand-sup {
+            font-family: var(--font-mono);
+            color: var(--accent-orange);
+            font-size: 0.75rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+
+        .brand-title {
+            font-family: var(--font-display);
+            font-size: 3.5rem;
+            font-weight: 800;
+            line-height: 0.9;
+            letter-spacing: -0.04em;
+            text-transform: uppercase;
+        }
+
+        .search-container {
+            margin-top: auto;
+            margin-bottom: 2rem;
+        }
+
+        .search-label {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .search-label::before {
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: var(--accent-acid);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .query-input {
+            width: 100%;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid var(--border-color);
+            color: var(--text-main);
+            font-family: var(--font-body);
+            font-size: 1.5rem;
+            padding: 0.5rem 0;
+            margin-bottom: 2rem;
+            outline: none;
+            transition: border-color 0.3s ease;
+            resize: none;
+            overflow: hidden;
+        }
+
+        .query-input:focus {
+            border-bottom-color: var(--accent-acid);
+        }
+
+        .query-input::placeholder {
+            color: var(--text-muted);
+            opacity: 0.5;
+        }
+
+        .run-btn {
+            background-color: var(--text-main);
+            color: var(--bg-color);
+            border: none;
+            padding: 1rem 2rem;
+            font-family: var(--font-display);
+            font-size: 1.2rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            cursor: pointer;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s ease;
+        }
+
+        .run-btn:hover {
+            background-color: var(--accent-acid);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(210, 255, 0, 0.1);
+        }
+
+        .run-btn-arrow {
+            font-family: var(--font-mono);
+            font-weight: 400;
+        }
+
+        /* Right Panel - Output Canvas */
+        .output-canvas {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* Terminal Window */
+        .terminal-window {
+            background-color: var(--surface-color);
+            border-bottom: 1px solid var(--border-color);
+            height: 35vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .window-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--accent-orange);
+            border: 1px solid var(--accent-orange);
+            padding: 0.15rem 0.5rem;
+            border-radius: 2px;
+        }
+
+        .terminal-content {
+            padding: 1.5rem;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            flex-grow: 1;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .log-entry {
+            margin-bottom: 0.5rem;
+            display: flex;
+            gap: 1rem;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .log-time {
+            color: #555;
+            min-width: 65px;
+        }
+
+        .log-hl { color: var(--text-main); }
+        .log-accent { color: var(--accent-acid); }
+
+        .cursor-blink {
+            display: inline-block;
+            width: 8px;
+            height: 15px;
+            background-color: var(--accent-acid);
+            vertical-align: middle;
+            animation: blink 1s step-end infinite;
+        }
+
+        /* Synthesis Protocol */
+        .synthesis-window {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--bg-color);
+            position: relative;
+        }
+
+        .synthesis-content {
+            padding: 3rem 4rem;
+            overflow-y: auto;
+            font-size: 1.15rem;
+            max-width: 900px;
+        }
+
+        .synthesis-content h1, 
+        .synthesis-content h2, 
+        .synthesis-content h3 {
+            font-family: var(--font-display);
+            margin: 2rem 0 1rem 0;
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        .synthesis-content p {
+            margin-bottom: 1.5rem;
+            color: #d0d0d0;
+        }
+
+        .synthesis-content strong {
+            color: var(--text-main);
+        }
+        
+        /* Simulated Markdown Blocks */
+        .md-quote {
+            border-left: 3px solid var(--accent-acid);
+            padding-left: 1.5rem;
+            margin: 2rem 0;
+            font-style: italic;
+            color: var(--text-muted);
+        }
+
+        /* Default Placeholder State */
+        .empty-state {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            opacity: 0.2;
+            pointer-events: none;
+        }
+
+        .empty-icon {
+            font-size: 4rem;
+            font-family: var(--font-display);
+            margin-bottom: 1rem;
+        }
+
+        /* Animations */
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(210, 255, 0, 0.4); }
+            70% { box-shadow: 0 0 0 6px rgba(210, 255, 0, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(210, 255, 0, 0); }
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .nexus-grid {
+                grid-template-columns: 1fr;
+                height: auto;
+            }
+            .control-panel {
+                height: auto;
+                position: relative;
+                padding: 2rem;
+                border-right: none;
+                border-bottom: 1px solid var(--border-color);
+            }
+            .output-canvas {
+                height: auto;
+                min-height: 100vh;
+            }
+            .terminal-window {
+                height: 300px;
+            }
+            .synthesis-content {
+                padding: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="nexus-grid">
+        
+        <!-- Left Data Entry Panel -->
+        <aside class="control-panel">
+            <div class="brand-header">
+                <span class="brand-sup">Cognitive System</span>
+                <h1 class="brand-title">Nexus<br>Agent</h1>
+            </div>
+
+            <div class="search-container">
+                <label class="search-label">Input Research Parameters</label>
+                <textarea 
+                    class="query-input" 
+                    rows="3" 
+                    placeholder="Enter deep research topic or technical query..."
+                ></textarea>
+                
+                <button class="run-btn" onclick="startMockSimulation()">
+                    <span>Deploy Agent</span>
+                    <span class="run-btn-arrow">→</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Right Output Matrix -->
+        <main class="output-canvas">
+            
+            <!-- Terminal Log Window -->
+            <section class="terminal-window">
+                <div class="window-header">
+                    <span>Task Execution Logs</span>
+                    <span class="status-badge" id="agent-status">AWAITING INPUT</span>
+                </div>
+                <div class="terminal-content" id="log-container">
+                    <div class="log-entry">
+                        <span class="log-time">[SYS]</span>
+                        <span>System highly configured. LangGraph engine initialized.</span>
+                    </div>
+                    <div class="log-entry">
+                        <span class="log-time">[SYS]</span>
+                        <span>Awaiting user deployment sequence...</span>
+                    </div>
+                    <!-- The blinking cursor -->
+                    <div id="terminal-cursor"><span class="cursor-blink"></span></div>
+                </div>
+            </section>
+
+            <!-- Final Render Window -->
+            <section class="synthesis-window">
+                <div class="window-header" style="border-bottom: 1px solid var(--border-color); background: var(--bg-color);">
+                    <span>Final Synthesis Protocol</span>
+                    <span>MD_RENDER</span>
+                </div>
+                
+                <div class="synthesis-content" id="markdown-container">
+                    
+                    <div class="empty-state" id="empty-state">
+                        <div class="empty-icon">∅</div>
+                        <div style="font-family: var(--font-mono); font-size: 0.85rem; letter-spacing: 0.1em; text-transform: uppercase;">Canvas Empty</div>
+                    </div>
+
+                    <!-- Example of what streamed content will look like -->
+                    <div id="stream-content" style="display: none;">
+                        <h2 style="opacity: 0; animation: slideIn 0.5s ease forwards 0.2s;">Initial Findings</h2>
+                        <p style="opacity: 0; animation: slideIn 0.5s ease forwards 0.4s;">The deep research agent has concluded its parallel extraction sequence. Based on the semantic vectors evaluated by the local inference engine...</p>
+                        
+                        <div class="md-quote" style="opacity: 0; animation: slideIn 0.5s ease forwards 0.6s;">
+                            "Parallelization of the scoring node yielded a 500% throughput increase without compromising zero-shot accuracy."
+                        </div>
+                        
+                        <h3 style="opacity: 0; animation: slideIn 0.5s ease forwards 0.8s;">Streaming Architecture</h3>
+                        <p style="opacity: 0; animation: slideIn 0.5s ease forwards 1s;">Tokens are currently being piped directly from the synthesiser to the client <span class="cursor-blink"></span></p>
+                    </div>
+
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script>
+        // Auto-resize textarea
+        const tx = document.querySelector('.query-input');
+        tx.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+
+        // Mock simulation function just to show the user how the UI feels when active
+        function startMockSimulation() {
+            const btn = document.querySelector('.run-btn');
+            const status = document.getElementById('agent-status');
+            const logs = document.getElementById('log-container');
+            const emptyState = document.getElementById('empty-state');
+            const streamContent = document.getElementById('stream-content');
+            const cursor = document.getElementById('terminal-cursor');
+            
+            if (tx.value.trim() === '') {
+                tx.value = "Tell me about LangGraph memory architectures";
+            }
+
+            // UI Reset
+            btn.innerHTML = '<span>Processing...</span><span class="run-btn-arrow">⚡</span>';
+            btn.style.backgroundColor = 'var(--accent-acid)';
+            btn.style.color = 'var(--bg-color)';
+            status.style.color = 'var(--accent-acid)';
+            status.style.borderColor = 'var(--accent-acid)';
+            status.innerHTML = '● RUNNING';
+            emptyState.style.display = 'none';
+            streamContent.style.display = 'none';
+            
+            // Clear old logs (keeping system init)
+            Array.from(logs.children).forEach(child => {
+                if (child.id !== 'terminal-cursor' && !child.innerHTML.includes('[SYS]')) {
+                    logs.removeChild(child);
+                }
+            });
+
+            // Mock Streaming Sequence
+            const steps = [
+                { time: 500, node: 'planner', msg: 'Generating 3 distinct semantic sub-queries...' },
+                { time: 1500, node: 'researcher', msg: 'Parallel FAISS extraction initiated. Scraping web endpoints.' },
+                { time: 2500, node: 'grader', msg: '<span class="log-hl">Evaluating 5 documents via local Mistral. Semaphore limited to 3...</span>' },
+                { time: 4000, node: 'grader', msg: 'Found <span class="log-accent">3 relevant documents</span>. Filtering noise.' },
+                { time: 4500, node: 'synthesiser', msg: 'Connecting to inference endpoint. Stream initialized.' }
+            ];
+
+            let cumulativeDelay = 0;
+            steps.forEach(step => {
+                setTimeout(() => {
+                    const entry = document.createElement('div');
+                    entry.className = 'log-entry';
+                    entry.innerHTML = `<span class="log-time">[${step.node.toUpperCase()}]</span><span>${step.msg}</span>`;
+                    logs.insertBefore(entry, cursor);
+                    logs.scrollTop = logs.scrollHeight;
+                }, step.time);
+            });
+
+            // Show final content later
+            setTimeout(() => {
+                status.style.color = 'var(--text-main)';
+                status.style.borderColor = 'var(--border-color)';
+                status.innerHTML = 'COMPLETED';
+                btn.innerHTML = '<span>Deploy Agent</span><span class="run-btn-arrow">→</span>';
+                btn.style.backgroundColor = '';
+                btn.style.color = '';
+                
+                streamContent.style.display = 'block';
+            }, 5500);
+        }
+    </script>
+</body>
+</html>

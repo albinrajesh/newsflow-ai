@@ -1,5 +1,4 @@
 import json
-import uuid
 import asyncio
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -17,52 +16,42 @@ class ResearchRequest(BaseModel):
 async def research_stream(request: ResearchRequest):
     """
     Endpoint to stream research results using LangGraph astream_events.
+    Stateless version: no thread_id required.
     """
     print(f"\n[API] Received research request: {request.query}")
     
-    # 1. Initialize State and Config
-    # We use a unique thread_id so SqliteSaver can track this specific run
-    thread_id = str(uuid.uuid4())
-    config = {
-        "configurable": {
-            "thread_id": thread_id
-        }
-    }
-    
-    # Pass only the query; let the AgentState handles the list initializations
+    # Pass only the query; initial state handles list initializations
     initial_input = {"query": request.query}
 
     async def event_generator():
         print("DEBUG: event_generator started")
         try:
             # 2. Stream events using version 'v2'
-            async for event in agent.astream_events(initial_input, config, version="v2"):
+            # We no longer pass 'config' here because checkpointer is removed
+            async for event in agent.astream_events(initial_input, version="v2"):
                 kind = event["event"]
-                # Get the name of the node currently running
                 node = event.get("metadata", {}).get("langgraph_node", "unknown")
 
-                # --- DEBUG LOGGING ---
+                # --- DEBUG LOGGING & STATUS UPDATES ---
                 if kind == "on_chain_start" and node != "unknown":
                     print(f"DEBUG: Starting Node: {node}")
-                    # We can still send status updates for the UI
                     yield f"data: {json.dumps({'status': f'Processing {node}...'})}\n\n"
 
                 # 3. Capture Token Streaming - FILTERED
-                # We ONLY yield tokens if the current node is 'synthesiser'
+                # Only stream if the synthesiser is active (UX Play)
                 if kind == "on_chat_model_stream":
-                    if node == "synthesiser":  # <--- CRITICAL FILTER
+                    if node == "synthesiser": 
                         content = event["data"]["chunk"].content
                         if content:
                             yield f"data: {json.dumps({'content': content})}\n\n"
                     else:
-                        # This skips the Planner's sub-questions and Grader's YES/NO
                         continue
 
                 # 4. Log completion of nodes
                 if kind == "on_chain_end" and node != "unknown":
                     print(f"DEBUG: Finished Node: {node}")
 
-            # 5. Signal completion
+            # 5. Signal completion for the test script
             print("DEBUG: Stream Finished Successfully")
             yield "data: [DONE]\n\n"
 

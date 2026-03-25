@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "premium-frontend-ui": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "computedHash": "2dcc7fe529ddad9b826fcc8ba43fb2357fc2919cc1d1cb5aaa6bcb434d872f9c"
+    }
+  }
+}
