@@ -7,68 +7,70 @@ from app.config import settings
 
 async def researcher_node(state: AgentState) -> Dict[str, Any]:
     """
-    Retrieves documents from local FAISS and MCP Web Search.
-    Handles 'unhashable type' errors by ensuring all docs are strings.
+    Retrieves documents from local FAISS with source-filtering and MCP Web Search.
     """
-    print(f"\n[Researcher] Processing {len(state.get('sub_questions', []))} sub-questions...")
+    query = state.get("query", "")
+    # New: Check if the user specified a specific source in the state
+    current_source = state.get("current_source") 
+    
+    print(f"\n[Researcher] Planning {len(state.get('sub_questions', []))} sub-questions...")
+    if current_source:
+        print(f"[Researcher] Context restricted to source: {current_source}")
+
     all_docs = []
     
     # 1. Local FAISS Retrieval
-    # We use asyncio.to_thread because retrieve() in rag/retriever.py is synchronous
     try:
-        sub_questions = state.get("sub_questions", [state["query"]])
+        sub_questions = state.get("sub_questions", [query])
+        
+        # We pass the 'source' filter to our updated retrieve function
         retrieval_tasks = [
-            asyncio.to_thread(retrieve, query, top_k=2) 
-            for query in sub_questions
+            asyncio.to_thread(retrieve, q, top_k=3, source=current_source) 
+            for q in sub_questions
         ]
         
         retrieval_results = await asyncio.gather(*retrieval_tasks)
         
         for result in retrieval_results:
-            if isinstance(result, list):
-                # Ensure every item in the list is a string
-                all_docs.extend([str(item) for item in result])
-            else:
-                all_docs.append(str(result))
+            for doc in result:
+                # If 'doc' is a LangChain Document object, extract content + source
+                if hasattr(doc, 'page_content'):
+                    source_info = doc.metadata.get('source', 'Local Index')
+                    content = doc.page_content
+                    all_docs.append(f"Source [{source_info}]: {content}")
+                else:
+                    all_docs.append(str(doc))
                 
-        print(f"[Researcher] Local FAISS found {len(all_docs)} chunks.")
+        print(f"[Researcher] Local FAISS found {len(all_docs)} relevant chunks.")
     except Exception as e:
         print(f"[Researcher] Local Retrieval Error: {e}")
 
-    # 2. MCP Web Search (Async HTTPX)
-    if settings.mcp_server_url:
+    # 2. MCP Web Search (Only if local search doesn't find enough or if no specific source is set)
+    if settings.mcp_server_url and not current_source:
         try:
             async with httpx.AsyncClient() as client:
-                print(f"[Researcher] Connecting to MCP at {settings.mcp_server_url}...")
+                print(f"[Researcher] Searching web via MCP...")
                 mcp_response = await client.post(
                     f"{settings.mcp_server_url}/tools/web_search",
-                    json={"query": state["query"], "max_results": 3},
+                    json={"query": query, "max_results": 3},
                     timeout=10.0 
                 )
                 
                 if mcp_response.status_code == 200:
                     web_results = mcp_response.json().get("results", [])
                     for res in web_results:
-                        content = res.get('content', '')
-                        url = res.get('url', 'unknown')
-                        all_docs.append(f"Web Source [{url}]: {content}")
-                    print(f"[Researcher] MCP Search added {len(web_results)} results.")
+                        all_docs.append(f"Web Source [{res.get('url')}]: {res.get('content')}")
         except Exception as e:
-            print(f"[Researcher] MCP Search skipped due to error: {e}")
+            print(f"[Researcher] MCP Search skipped: {e}")
 
-    # 3. Defensive Duplicate Removal (Fixes 'unhashable type: list')
+    # 3. Final Cleaning & Deduplication
     unique_docs = []
     seen = set()
-    
     for doc in all_docs:
-        # Final safety check: if 'doc' is somehow still a list, join it into a string
-        clean_doc = " ".join(doc) if isinstance(doc, list) else str(doc)
-        
-        if clean_doc not in seen:
-            unique_docs.append(clean_doc)
-            seen.add(clean_doc)
+        if doc not in seen:
+            unique_docs.append(doc)
+            seen.add(doc)
     
     print(f"[Researcher] Total unique documents gathered: {len(unique_docs)}")
     
-    # Return the dictionary to update the global LangGraph state
     return {"retrieved_docs": unique_docs}
