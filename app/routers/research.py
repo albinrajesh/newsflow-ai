@@ -1,8 +1,10 @@
 import json
 import asyncio
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+
+from rag.ingest import ingest_pdf_service, ingest_url_service
 
 # Import the compiled graph from your agent/graph.py
 from agent.graph import agent
@@ -11,6 +13,26 @@ router = APIRouter(prefix="/research", tags=["research"])
 
 class ResearchRequest(BaseModel):
     query: str
+
+class URLRequest(BaseModel):
+    url: str
+
+@router.post("/upload")
+async def upload_file(file: UploadFile = File(...)):
+    try:
+        file_bytes = await file.read()
+        result = await ingest_pdf_service(file_bytes, file.filename)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/ingest_url")
+async def ingest_url(request: URLRequest):
+    try:
+        result = await ingest_url_service(request.url)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/stream")
 async def research_stream(request: ResearchRequest):

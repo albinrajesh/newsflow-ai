@@ -680,10 +680,6 @@
                     <div class="msg-bubble markdown-body">
                         <h2>Welcome to Newsflow.</h2>
                         <p>I am your advanced research agent. You can ask me any question, or upload source material (PDFs / YouTube Links) for me to ingest into the vector database.</p>
-                        <pre><code class="language-python"># Example Architecture
-vector_db = FAISS.load_local("index", embeddings)
-def research(query):
-    return vector_db.similarity_search(query)</code></pre>
                     </div>
                 </div>
             </section>
@@ -885,28 +881,208 @@ def research(query):
 
         function handleChatSubmit(e) { if(e.key === 'Enter') submitChat(); }
 
-        function submitChat() {
+        async function submitChat() {
             if(isGenerating) {
-                // User pressed stop
+                // Future: Add abort controller signal
                 toggleStreamingState(false);
                 return;
             }
 
-            const val = chatInput.value.trim();
-            if(!val) return;
+            const query = chatInput.value.trim();
+            if(!query) return;
             
-            appendUserMessage(val);
+            appendUserMessage(query);
             chatInput.value = '';
             updateCharCount();
             toggleStreamingState(true);
 
-            // Mock processing delay then markdown delivery
-            setTimeout(() => {
-                if(!isGenerating) return; // if user canceled
+            try {
+                const response = await fetch('/research/stream', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query })
+                });
+
+                if (!response.ok) throw new Error('Network response was not ok');
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let accumulatedMarkdown = "";
+                let currentAiMessageElement = null;
+                let currentAiMessageId = null;
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value, { stream: true });
+                    const lines = chunk.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const dataStr = line.replace('data: ', '').trim();
+                            if (dataStr === '[DONE]') {
+                                toggleStreamingState(false);
+                                break;
+                            }
+
+                            try {
+                                const data = JSON.parse(dataStr);
+                                
+                                // Handle Status Updates (Node Tracking)
+                                if (data.status) {
+                                    // Update UI to show what the agent is doing
+                                    console.log("Status:", data.status);
+                                    // Could add a small status indicator in the UI
+                                }
+
+                                // Handle Content Streaming
+                                if (data.content) {
+                                    accumulatedMarkdown += data.content;
+                                    
+                                    if (!currentAiMessageElement) {
+                                        currentAiMessageId = "msg-" + Date.now();
+                                        const html = `
+                                            <div class="message ai" id="${currentAiMessageId}">
+                                                <div class="msg-bubble markdown-body"></div>
+                                            </div>
+                                        `;
+                                        chatCanvas.insertAdjacentHTML('beforeend', html);
+                                        currentAiMessageElement = document.getElementById(currentAiMessageId).querySelector('.msg-bubble');
+                                    }
+
+                                    // Render and sanitize
+                                    const rawHtml = marked.parse(accumulatedMarkdown);
+                                    currentAiMessageElement.innerHTML = DOMPurify.sanitize(rawHtml);
+                                    
+                                    // Syntax highlighting for current block
+                                    currentAiMessageElement.querySelectorAll('pre code').forEach((el) => {
+                                        hljs.highlightElement(el);
+                                    });
+                                    
+                                    scrollToBottom();
+                                }
+
+                                if (data.error) {
+                                    throw new Error(data.error);
+                                }
+                            } catch (e) {
+                                console.error("Error parsing stream chunk:", e, dataStr);
+                            }
+                        }
+                    }
+                }
+
+                // Final pass to add copy buttons
+                if (currentAiMessageId) {
+                    const block = document.getElementById(currentAiMessageId);
+                    addCopyButtons(block);
+                }
+
+            } catch (error) {
+                console.error("Stream Error:", error);
+                const errorHtml = `
+                    <div class="message ai">
+                        <div class="msg-bubble markdown-body" style="color:var(--danger)">
+                            <strong>Error:</strong> ${error.message}
+                        </div>
+                    </div>
+                `;
+                chatCanvas.insertAdjacentHTML('beforeend', errorHtml);
+            } finally {
                 toggleStreamingState(false);
-                const mockMarkdown = `Here are the results of the extraction:\n\n### Optimization Strategy\nThe Graph RAG system effectively bypasses standard vector limitations.\n\n\`\`\`python\nimport asyncio\nsem = asyncio.Semaphore(3)\n# High-performance parallel inference\nasync def local_grade(doc):\n    async with sem:\n        return await llm.ainvoke(doc)\n\`\`\`\n\n* **Speed Increase:** 300%\n* **Hardware Load:** Stable`;
-                appendAiMarkdown(mockMarkdown);
-            }, 2000);
+                refreshHoverEffects();
+            }
+        }
+
+        function addCopyButtons(container) {
+            container.querySelectorAll("pre").forEach(pre => {
+                if (pre.querySelector('.copy-btn')) return;
+                const btn = document.createElement("button");
+                btn.className = "copy-btn hoverable";
+                btn.innerText = "Copy";
+                btn.onclick = () => {
+                    navigator.clipboard.writeText(pre.innerText.replace('Copy', ''));
+                    btn.innerText = "Copied!";
+                    setTimeout(() => btn.innerText = "Copy", 2000);
+                };
+                pre.appendChild(btn);
+            });
+        }
+
+        // --- Ingestion Endpoints ---
+
+        async function handleFileUpload(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            toggleUploadPanel();
+            progressBar.classList.add('active');
+            
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/research/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showToast(`Success: Ingested ${result.chunks} chunks from ${file.name}`);
+                } else {
+                    throw new Error(result.detail || "Upload failed");
+                }
+            } catch (error) {
+                showToast(`Error: ${error.message}`, true);
+            } finally {
+                progressBar.classList.remove('active');
+                input.value = '';
+            }
+        }
+
+        async function handleYtSubmit(e, input) {
+            if (e.key !== 'Enter') return;
+            const url = input.value.trim();
+            if (!url) return;
+
+            toggleUploadPanel();
+            progressBar.classList.add('active');
+
+            try {
+                const response = await fetch('/research/ingest_url', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+                const result = await response.json();
+
+                if (response.ok) {
+                    showToast(`Success: Ingested ${result.chunks} chunks from YouTube`);
+                } else {
+                    throw new Error(result.detail || "URL ingestion failed");
+                }
+            } catch (error) {
+                showToast(`Error: ${error.message}`, true);
+            } finally {
+                progressBar.classList.remove('active');
+                input.value = '';
+            }
+        }
+
+        function showToast(message, isError = false) {
+            const toastId = "toast-" + Date.now();
+            const color = isError ? 'rgba(239, 68, 68, 0.9)' : 'rgba(139, 92, 246, 0.9)';
+            const html = `
+                <div id="${toastId}" style="position:fixed; bottom:100px; right:30px; background:${color}; color:white; padding:12px 24px; border-radius:12px; z-index:10000; backdrop-filter:blur(10px); box-shadow:0 10px 30px rgba(0,0,0,0.5); transform:translateY(20px); opacity:0; transition:all 0.4s cubic-bezier(0.16, 1, 0.3, 1);">
+                    ${message}
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', html);
+            const toast = document.getElementById(toastId);
+            setTimeout(() => { toast.style.transform = "translateY(0)"; toast.style.opacity = "1"; }, 10);
+            setTimeout(() => { toast.style.transform = "translateY(20px)"; toast.style.opacity = "0"; setTimeout(() => toast.remove(), 400); }, 4000);
         }
 
     </script>
